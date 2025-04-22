@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/main"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".LoginActivity">
+
+    <ImageView
+        android:id="@+id/BackgroundLogin"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:scaleType="centerCrop"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.0"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:srcCompat="@drawable/background" />
+
+    <TextView
+        android:id="@+id/TextLogin"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Login"
+        android:textColor="#FFFFFF"
+        android:textColorLink="#FFFFFF"
+        android:textSize="34sp"
+        android:textStyle="bold"
+        app:layout_constraintBottom_toBottomOf="@+id/BackgroundLogin"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_bias="0.065"/>
+
+    <TextView
+        android:id="@+id/EmailLogin"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="32dp"
+        android:text="Email"
+        android:textColor="#FFFFFF"
+        android:textSize="18sp"
+        app:layout_constraintBottom_toBottomOf="@+id/BackgroundLogin"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.0"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/TextLogin"
+        app:layout_constraintVertical_bias="0.07" />
+
+    <androidx.appcompat.widget.AppCompatEditText
+        android:id="@+id/CaixaDeTextoEmail"
+        android:layout_width="match_parent"
+        android:layout_height="55dp"
+        android:layout_marginStart="32dp"
+        android:layout_marginEnd="32dp"
+        android:layout_marginBottom="328dp"
+        android:background="@drawable/caixatexto_uber_cinza"
+        android:ems="10"
+        android:hint="Digite seu e-mail:"
+        android:inputType="textEmailAddress"
+        android:padding="16dp"
+        android:textColorHint="#020202"
+        android:drawableLeft="@drawable/email"
+        android:drawablePadding="5dp"
+        app:layout_constraintBottom_toBottomOf="@+id/BackgroundLogin"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.0"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/TextLogin"
+        app:layout_constraintVertical_bias="0.35" />
+
+    <TextView
+        android:id="@+id/SenhaLogin"
+        android:layout_width="63dp"
+        android:layout_height="30dp"
+        android:text="Senha"
+        android:textColor="#FFFFFF"
+        android:textSize="18sp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.091"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_bias="0.375" />
+
+    <EditText
+        android:id="@+id/CaixaDeTextoSenha"
+        android:layout_width="0dp"
+        android:layout_height="55dp"
+        android:layout_marginStart="32dp"
+        android:layout_marginEnd="32dp"
+        android:background="@drawable/caixatexto_uber_cinza"
+        android:ems="10"
+        android:hint="Digite a sua senha:"
+        android:inputType="textPassword"
+        android:padding="16dp"
+        android:textColorHint="#020202"
+        android:drawableLeft="@drawable/lock"
+        android:drawablePadding="5dp"
+        app:layout_constraintBottom_toBottomOf="@+id/BackgroundLogin"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.0"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_bias="0.46" />
+
+    <Switch
+        android:id="@+id/SwitchLembrar"
+        android:layout_width="128dp"
+        android:layout_height="53dp"
+        android:text="Lembrar"
+        android:textColor="#FBFBFB"
+        android:textColorLink="#C6C6C6"
+        android:textSize="20dp"
+        app:layout_constraintBottom_toBottomOf="@+id/BackgroundLogin"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.113"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/CaixaDeTextoSenha"
+        app:layout_constraintVertical_bias="0.092"/>
+
+    <TextView
+        android:id="@+id/TextEsqueceuSenha"
+        android:layout_width="202dp"
+        android:layout_height="42dp"
+        android:text="Esqueceu a senha ?"
+        android:textColor="#C6C6C6"
+        android:textSize="20dp"
+        android:textStyle="bold"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.846"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="@+id/SwitchLembrar"
+        app:layout_constraintVertical_bias="0.05" />
+
+    <androidx.appcompat.widget.AppCompatButton
+        android:id="@+id/BotaoSalvar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="32dp"
+        android:layout_marginEnd="32dp"
+        android:textStyle="bold"
+        android:background="@drawable/btn_uber_branco"
+        android:text="Conectar"
+        app:layout_constraintBottom_toBottomOf="@+id/BackgroundLogin"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.0"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/CaixaDeTextoSenha"
+        app:layout_constraintVertical_bias="0.362"/>
+
+    <TextView
+        android:id="@+id/TextNaotemConta"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="32dp"
+        android:layout_marginEnd="32dp"
+        android:text="Não tem conta ?"
+        android:textColor="#EFEFEF"
+        android:textSize="20dp"
+        android:textStyle="bold"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.121"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="@+id/BackgroundLogin"
+        app:layout_constraintVertical_bias="0.828"/>
+
+    <TextView
+        android:id="@+id/TextInscreverse"
+        android:layout_width="130dp"
+        android:layout_height="31dp"
+        android:layout_marginEnd="32dp"
+        android:text="Inscrever-se"
+        android:textColor="#c6c6c6"
+        android:textSize="20dp"
+        android:textStyle="bold"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.859"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_bias="0.832"/>
+
+</androidx.constraintlayout.widget.ConstraintLayout>
