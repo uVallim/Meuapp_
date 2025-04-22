@@ -1,28 +1,58 @@
 package com.example.meuapp.api;
 
+import android.content.Context;
+import android.content.SharedPreferences;
+
 import java.util.concurrent.TimeUnit;
 import okhttp3.OkHttpClient;
+import okhttp3.Request;
 import retrofit2.Retrofit;
 import retrofit2.converter.gson.GsonConverterFactory;
 
 public class ApiClient {
+    private static final String BASE_URL = "https://r3l2g7-3001.csb.app/";
     private static Retrofit retrofit = null;
+    private static Retrofit retrofitWithToken = null;
 
+    // Para requisições sem autenticação (como login)
     public static Retrofit getClient() {
         if (retrofit == null) {
-            // Configurar o OkHttpClient para aumentar o timeout
-            OkHttpClient okHttpClient = new OkHttpClient.Builder()
-                    .connectTimeout(60, TimeUnit.SECONDS)  // Tempo para estabelecer a conexão
-                    .writeTimeout(60, TimeUnit.SECONDS)    // Tempo de escrita
-                    .readTimeout(60, TimeUnit.SECONDS)     // Tempo de leitura
-                    .build();
-
             retrofit = new Retrofit.Builder()
-                    .baseUrl("https://r3l2g7-3001.csb.app/")  // Base URL
-                    .client(okHttpClient)  // Passa o OkHttpClient customizado
-                    .addConverterFactory(GsonConverterFactory.create())  // Conversão de JSON para objetos Java
+                    .baseUrl(BASE_URL)
+                    .client(new OkHttpClient.Builder()
+                            .connectTimeout(60, TimeUnit.SECONDS)
+                            .writeTimeout(60, TimeUnit.SECONDS)
+                            .readTimeout(60, TimeUnit.SECONDS)
+                            .build())
+                    .addConverterFactory(GsonConverterFactory.create())
                     .build();
         }
         return retrofit;
+    }
+
+    // Para requisições autenticadas (com token)
+    public static Retrofit getClient(Context context) {
+        if (retrofitWithToken == null) {
+            String token = context.getSharedPreferences("app", Context.MODE_PRIVATE)
+                    .getString("jwt_token", "");
+
+            OkHttpClient client = new OkHttpClient.Builder()
+                    .addInterceptor(chain -> {
+                        Request original = chain.request();
+                        Request request = original.newBuilder()
+                                .header("Authorization", "Bearer " + token)
+                                .build();
+                        return chain.proceed(request);
+                    })
+                    .connectTimeout(60, TimeUnit.SECONDS)
+                    .build();
+
+            retrofitWithToken = new Retrofit.Builder()
+                    .baseUrl(BASE_URL)
+                    .client(client)
+                    .addConverterFactory(GsonConverterFactory.create())
+                    .build();
+        }
+        return retrofitWithToken;
     }
 }
