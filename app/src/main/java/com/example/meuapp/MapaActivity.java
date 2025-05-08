@@ -2,6 +2,7 @@ package com.example.meuapp;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
@@ -15,6 +16,7 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageButton;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -42,6 +44,12 @@ import com.google.maps.GeoApiContext;
 import com.google.maps.android.PolyUtil;
 import com.google.maps.model.DirectionsResult;
 import com.google.maps.model.TravelMode;
+import com.google.android.gms.location.LocationRequest;
+import com.google.android.gms.location.LocationCallback;
+import com.google.android.gms.location.LocationResult;
+import android.location.LocationManager;
+import android.provider.Settings;
+import androidx.appcompat.app.AlertDialog;
 
 import java.io.IOException;
 import java.util.List;
@@ -56,6 +64,7 @@ public class MapaActivity extends FragmentActivity implements OnMapReadyCallback
     private EditText searchEditText;
     private ImageButton searchButton;
     private Button routeButton;
+    private ImageView routeImage;
     private Polyline currentPolyline;
     private LatLng destinationLatLng;
     private FusedLocationProviderClient fusedLocationClient;
@@ -76,11 +85,12 @@ public class MapaActivity extends FragmentActivity implements OnMapReadyCallback
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_mapa);
-
+        checkGpsEnabled();
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
-
         searchButton = findViewById(R.id.searchButton);
         routeButton = findViewById(R.id.routeButton);
+        routeImage = findViewById(R.id.carrouber);
+        routeImage.setVisibility(View.GONE);
         callButton = findViewById(R.id.callButton);
         callButton2 = findViewById(R.id.callButton2);
         originEditText = findViewById(R.id.originEditText);
@@ -103,8 +113,22 @@ public class MapaActivity extends FragmentActivity implements OnMapReadyCallback
         if (mapFragment != null) {
             mapFragment.getMapAsync(this);
         }
-    }
+        routeImage.setOnClickListener(v -> {
+            routeImage.setVisibility(View.GONE);
 
+        });
+    }
+    private void checkGpsEnabled() {
+        LocationManager manager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+        if (!manager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+            new AlertDialog.Builder(this)
+                    .setTitle("GPS desativado")
+                    .setMessage("Para melhor precisão, ative o GPS. Deseja ativar agora?")
+                    .setPositiveButton("Sim", (dialog, which) ->
+                            startActivity(new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)))
+                    .setNegativeButton("Não", null)
+                    .show();
+        }}
     @Override
     public void onMapReady(GoogleMap googleMap) {
         mMap = googleMap;
@@ -121,20 +145,32 @@ public class MapaActivity extends FragmentActivity implements OnMapReadyCallback
     }
 
     private boolean checkLocationPermission() {
-        return ContextCompat.checkSelfPermission(this,
-                Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+        if (ContextCompat.checkSelfPermission(this,
+                Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+
+            ActivityCompat.requestPermissions(this,
+                    new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
+                    REQUEST_LOCATION_PERMISSION);
+            return false;
+        }
+        return true;
     }
 
     private void enableMyLocation() {
         if (ActivityCompat.checkSelfPermission(this,
                 Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+
             mMap.setMyLocationEnabled(true);
             mMap.setOnMyLocationButtonClickListener(this);
             mMap.setOnMyLocationClickListener(this);
+
             getLastKnownLocation();
+        } else {
+            checkLocationPermission();
         }
     }
 
+    @SuppressLint("MissingPermission")
     private void getLastKnownLocation() {
         if (checkLocationPermission()) {
             fusedLocationClient.getLastLocation()
@@ -144,9 +180,40 @@ public class MapaActivity extends FragmentActivity implements OnMapReadyCallback
                             updateCurrentLocationUI();
                             updateCurrentAddress(location);
                         } else {
-                            Toast.makeText(this, "Não foi possível obter a localização", Toast.LENGTH_SHORT).show();
+                            // Se a localização for nula, tenta obter uma atualização
+                            requestNewLocationData();
                         }
+                    })
+                    .addOnFailureListener(e -> {
+                        Toast.makeText(this, "Erro ao obter localização: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                        Log.e("Location", "Erro: ", e);
                     });
+        }
+    }
+
+    private void requestNewLocationData() {
+        LocationRequest locationRequest = LocationRequest.create();
+        locationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
+        locationRequest.setInterval(10000);
+        locationRequest.setFastestInterval(5000);
+
+        if (ActivityCompat.checkSelfPermission(this,
+                Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+
+            fusedLocationClient.requestLocationUpdates(locationRequest,
+                    new LocationCallback() {
+                        @Override
+                        public void onLocationResult(LocationResult locationResult) {
+                            if (locationResult != null && locationResult.getLastLocation() != null) {
+                                Location location = locationResult.getLastLocation();
+                                currentLocation = new LatLng(location.getLatitude(), location.getLongitude());
+                                updateCurrentLocationUI();
+                                updateCurrentAddress(location);
+                                fusedLocationClient.removeLocationUpdates(this);
+                            }
+                        }
+                    },
+                    null);
         }
     }
 
@@ -248,6 +315,8 @@ public class MapaActivity extends FragmentActivity implements OnMapReadyCallback
 
         routeButton.setEnabled(false);
         routeButton.setText("Calculando rota...");
+        routeImage.setVisibility(View.GONE);
+
 
         new Thread(() -> {
             try {
@@ -277,11 +346,14 @@ public class MapaActivity extends FragmentActivity implements OnMapReadyCallback
                     }
 
                     processRouteResult(result);
+                    routeImage.setVisibility(View.VISIBLE);
                 });
             } catch (Exception e) {
                 runOnUiThread(() -> {
                     routeButton.setEnabled(true);
                     routeButton.setText("Calcular Rota");
+                    routeImage.setVisibility(View.GONE);
+                    routeImage.setVisibility(View.VISIBLE);
                     Toast.makeText(this, "Erro ao calcular rota: " + e.getMessage(), Toast.LENGTH_LONG).show();
                     Log.e("DirectionsAPI", "Erro na API", e);
                 });
@@ -401,18 +473,20 @@ public class MapaActivity extends FragmentActivity implements OnMapReadyCallback
         if (requestCode == REQUEST_LOCATION_PERMISSION) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 enableMyLocation();
+            } else {
+                Toast.makeText(this,
+                        "Permissão de localização negada. Algumas funcionalidades não estarão disponíveis.",
+                        Toast.LENGTH_LONG).show();
             }
         } else if (requestCode == REQUEST_CALL_PERMISSION) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                // Usar o número do primeiro botão como padrão
                 startPhoneCall("20797429");
             } else {
                 Toast.makeText(this, "Permissão para ligação negada", Toast.LENGTH_SHORT).show();
             }
         } else if (requestCode == REQUEST_CALL_PERMISSION_2) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                startPhoneCall("20797429"); // Ou outro número para o segundo botão
+                startPhoneCall("20797429");
             }
         }
-    }
-}
+    }}

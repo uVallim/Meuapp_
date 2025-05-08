@@ -1,9 +1,9 @@
 package com.example.meuapp;
 
-import android.annotation.SuppressLint;
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.View;
+import android.widget.ImageButton;
 import android.widget.TextView;
 
 import androidx.activity.EdgeToEdge;
@@ -14,67 +14,51 @@ import androidx.core.view.WindowInsetsCompat;
 
 public class CentralActivity extends AppCompatActivity {
 
-    private TextView textQualSeuDestino;
-    private TextView textEditarPerfil;
-    private TextView textExcluirSuaConta;
-    private TextView textSairDaConta;
+    private TextView textQualSeuDestino, textEditarPerfil, textExcluirSuaConta, textSairDaConta;
+    private ImageButton imageButtonSair;
 
-    @SuppressLint("MissingInflatedId")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_central);
 
-        // Aplicando padding com base nas barras do sistema
+        // Initialize components
+        initComponents();
+
+        // Set system window insets
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
             Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
             return insets;
         });
 
-        // Inicializa os componentes
-        IniciarComponentes();
-
-        // Adiciona clique nos botões
-        textQualSeuDestino.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                Intent intent = new Intent(CentralActivity.this, MapaActivity.class);
-                startActivity(intent);
-            }
-        });
-
-        textEditarPerfil.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                Intent intent = new Intent(CentralActivity.this, ProfileActivity.class);
-                startActivity(intent);
-            }
-        });
-
-        textExcluirSuaConta.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                Intent intent = new Intent(CentralActivity.this, MainActivity.class);
-                startActivity(intent);
-            }
-        });
-
-        textSairDaConta.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                Intent intent = new Intent(CentralActivity.this, LoginActivity.class);
-                startActivity(intent);
-            }
-        });
+        // Set click listeners
+        setClickListeners();
     }
 
-    // Método para inicializar os componentes
-    private void IniciarComponentes() {
+    private void initComponents() {
         textQualSeuDestino = findViewById(R.id.TextQualSeuDestino);
         textEditarPerfil = findViewById(R.id.TextEditarPerfil);
         textExcluirSuaConta = findViewById(R.id.TextExcluirSuaConta);
         textSairDaConta = findViewById(R.id.SairDaConta);
+        imageButtonSair = findViewById(R.id.imageButtonSair);
+    }
+
+    private void setClickListeners() {
+        // Set click listeners using lambda expressions
+        textQualSeuDestino.setOnClickListener(v ->
+                startActivity(new Intent(this, MapaActivity.class)));
+
+        textEditarPerfil.setOnClickListener(v ->
+                startActivity(new Intent(this, ProfileActivity.class)));
+
+        textExcluirSuaConta.setOnClickListener(v ->
+                startActivity(new Intent(this, MainActivity.class)));
+
+        textSairDaConta.setOnClickListener(v ->
+                startActivity(new Intent(this, LoginActivity.class)));
+
+        imageButtonSair.setOnClickListener(v -> finish());
     }
 }
