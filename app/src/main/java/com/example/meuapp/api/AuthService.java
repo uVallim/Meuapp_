@@ -10,7 +10,7 @@ import retrofit2.http.Body;
 import retrofit2.http.POST;
 
 public interface AuthService {
-    @POST("/api/auth/Cadastro")
+    @POST("/api/auth/cadastro")
     Call<ApiResponse> registerUser(@Body User user);
 
     @POST("/api/auth/login")
