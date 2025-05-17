@@ -10,7 +10,7 @@ import retrofit2.Retrofit;
 import retrofit2.converter.gson.GsonConverterFactory;
 
 public class ApiClient {
-    private static final String BASE_URL = "https://r3l2g7-3001.csb.app/";
+    private static final String BASE_URL = "https://5ht475-3001.csb.app";
     private static Retrofit retrofit = null;
     private static Retrofit retrofitWithToken = null;
 
