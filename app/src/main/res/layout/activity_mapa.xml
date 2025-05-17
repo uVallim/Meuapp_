@@ -152,7 +152,7 @@
             android:backgroundTint="@color/black"
             android:padding="12dp"
             android:scaleType="centerInside"
-            android:src="@drawable/police" />
+            android:src="@drawable/policial180" />
 
         <ImageButton
             android:id="@+id/callButton2"
@@ -166,7 +166,7 @@
             android:backgroundTint="@color/black"
             android:padding="12dp"
             android:scaleType="centerInside"
-            android:src="@drawable/police1" />
+            android:src="@drawable/policia190" />
 
         <ImageButton
             android:id="@+id/rota"
@@ -180,7 +180,7 @@
             android:backgroundTint="@color/black"
             android:padding="12dp"
             android:scaleType="centerInside"
-            android:src="@drawable/rota" />
+            android:src="@drawable/verrota" />
 
         <ImageButton
             android:id="@+id/localizacao"
@@ -194,7 +194,7 @@
             android:backgroundTint="@color/black"
             android:padding="12dp"
             android:scaleType="centerInside"
-            android:src="@drawable/local" />
+            android:src="@drawable/vermapa" />
 
         <ImageView
             android:id="@+id/carrouber"

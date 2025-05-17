@@ -1,75 +1,68 @@
 package com.example.meuapp;
 
-// Importações padrão do seu código
+import android.app.AlertDialog;
+import android.app.ProgressDialog; // NOTA: ProgressDialog é depreciado. Considere alternativas.
+import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Bundle;
+import android.util.Log;
+import android.view.View;
 import android.widget.ImageButton;
 import android.widget.TextView;
-import androidx.activity.EdgeToEdge;
+import android.widget.Toast;
+
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.graphics.Insets;
-import androidx.core.view.ViewCompat;
-import androidx.core.view.WindowInsetsCompat;
 
-// --- Novas importações para a funcionalidade de exclusão ---
-import android.app.AlertDialog; // Para o diálogo de confirmação
-import android.app.ProgressDialog; // Para o diálogo de progresso
-import android.content.Context; // Para usar SharedPreferences
-import android.content.DialogInterface; // Para o listener do diálogo
-import android.content.SharedPreferences; // Para obter/limpar o token
-import android.util.Log; // Para logs de debug
-import android.view.View; // Para o OnClickListener
-import android.widget.Toast; // Para mensagens Toast
-
-// --- Importações da API e Retrofit ---
 import com.example.meuapp.api.ApiClient;
-import com.example.meuapp.api.AuthService; // Assumindo que deleteAccount está aqui
-import com.example.meuapp.model.ApiResponse; // Assumindo que a resposta usa ApiResponse
+import com.example.meuapp.api.AuthService;
+import com.example.meuapp.model.ApiResponse;
+import com.google.gson.Gson;
+import com.google.gson.JsonSyntaxException;
+
+import java.io.IOException;
 
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
-// ---------------------------------------------------------
-
 
 public class CentralActivity extends AppCompatActivity {
 
     private TextView textQualSeuDestino, textEditarPerfil, textExcluirSuaConta, textSairDaConta;
+    private TextView textNomeUsuario; // TextView para o nome do usuário
+    private TextView textEmailUsuario; // TextView para o email do usuário
     private ImageButton imageButtonSair;
+    private AuthService authService;
 
-    // --- Novas variáveis para a funcionalidade de exclusão ---
-    private AuthService authService; // Serviço para chamadas API
-    private ProgressDialog progressDialog; // Diálogo de progresso
-    private static final String PREFS_NAME = "AuthPrefs"; // Nome do arquivo SharedPreferences
-    private static final String TOKEN_KEY = "jwt_token"; // Chave para o token
-    // -------------------------------------------------------
+    // NOTA: ProgressDialog é depreciado. Considere alternativas modernas.
+    private ProgressDialog progressDialog;
+
+    // Constantes para SharedPreferences (DEVEM SER IDÊNTICAS em Login, Central e Profile)
+    private static final String PREFS_NAME = "AuthPrefs";
+    private static final String TOKEN_KEY = "jwt_token";
+    private static final String USER_NAME_KEY = "user_name"; // Chave para ler o nome
+    private static final String USER_EMAIL_KEY = "user_email"; // Chave para ler o email
+
+    private static final String TAG = "CentralActivity";
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        EdgeToEdge.enable(this);
         setContentView(R.layout.activity_central);
 
-        // Initialize components
         initComponents();
-
-        // --- Inicializar serviço API e diálogo de progresso ---
-        authService = ApiClient.getClient().create(AuthService.class); // Inicializa o serviço Retrofit
-        progressDialog = new ProgressDialog(this);
-        progressDialog.setMessage("Processando..."); // Mensagem inicial, será alterada para exclusão
-        progressDialog.setCancelable(false); // Não permitir cancelar
-        // ----------------------------------------------------
-
-
-        // Set system window insets
-        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
-            Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
-            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
-            return insets;
-        });
-
-        // Set click listeners
+        setupServices();
         setClickListeners();
+
+        // Exibir as informações do usuário lidas do SharedPreferences
+        displayUserInfoFromPrefs();
+
+        Log.d(TAG, "Token na CentralActivity (onCreate): " + getJwtToken());
+
+        // Opcional: Carregar dados completos do perfil via API
+        // loadUserProfileDataFromApi();
     }
 
     private void initComponents() {
@@ -78,149 +71,291 @@ public class CentralActivity extends AppCompatActivity {
         textExcluirSuaConta = findViewById(R.id.TextExcluirSuaConta);
         textSairDaConta = findViewById(R.id.SairDaConta);
         imageButtonSair = findViewById(R.id.imageButtonSair);
+
+        // Encontrar os TextViews para o nome e email no layout
+        textNomeUsuario = findViewById(R.id.TextNomeUsuario); // ID do TextView no XML
+        textEmailUsuario = findViewById(R.id.TextEmailUsuario); // ID do TextView no XML
+    }
+
+    private void setupServices() {
+        authService = ApiClient.getClient().create(AuthService.class);
+        progressDialog = new ProgressDialog(this);
+        progressDialog.setCancelable(false);
     }
 
     private void setClickListeners() {
-        // Set click listeners using lambda expressions
         textQualSeuDestino.setOnClickListener(v ->
-                startActivity(new Intent(this, MapaActivity.class)));
+                startActivity(new Intent(this, MapaActivity.class))); // Verifique se MapaActivity existe
 
-        textEditarPerfil.setOnClickListener(v ->
-                startActivity(new Intent(this, ProfileActivity.class)));
-
-        // --- MODIFICADO: textExcluirSuaConta AGORA mostra o diálogo de confirmação ---
-        textExcluirSuaConta.setOnClickListener(v ->
-                showDeleteConfirmationDialog()); // Chama o método do diálogo
-        // --------------------------------------------------------------------------
-
-        // Lógica original para "Sair da Conta" e ImageButton Sair
-        textSairDaConta.setOnClickListener(v -> {
-            clearJwtToken(); // Limpa o token ao "sair"
-            redirectToLogin(); // Redireciona para a tela de login
+        textEditarPerfil.setOnClickListener(v -> {
+            Log.d(TAG, "Tentando editar perfil. Token atual: " + getJwtToken());
+            startActivity(new Intent(this, ProfileActivity.class)); // Navega para ProfileActivity
         });
 
-        imageButtonSair.setOnClickListener(v -> finish()); // Fecha a activity
+        textExcluirSuaConta.setOnClickListener(v ->
+                showDeleteConfirmationDialog());
+
+        // Sair da conta (Logout)
+        textSairDaConta.setOnClickListener(v -> {
+            Log.d(TAG, "Saindo da conta (logout).");
+            clearAuthData(); // Limpa token, nome E email do SharedPreferences
+            redirectToLogin("Sessão encerrada com sucesso.");
+        });
+
+        imageButtonSair.setOnClickListener(v -> {
+            // Este botão só fecha a CentralActivity, não faz logout.
+            finish();
+        });
     }
 
-    // --- NOVOS MÉTODOS PARA A FUNCIONALIDADE DE EXCLUSÃO ---
+    // Método para exibir informações do usuário lidas do SharedPreferences
+    private void displayUserInfoFromPrefs() {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
 
-    // Método para mostrar o dialog de confirmação
+        // Extrair o nome e o email usando as chaves definidas
+        String userName = prefs.getString(USER_NAME_KEY, null);
+        String userEmail = prefs.getString(USER_EMAIL_KEY, null); // Lê o email usando a chave CORRETA
+
+        // --- LOGS PARA DEPURAR A LEITURA ---
+        Log.d(TAG, "displayUserInfoFromPrefs: Lendo SharedPreferences.");
+        Log.d(TAG, "displayUserInfoFromPrefs: Chave Nome (" + USER_NAME_KEY + ") -> Valor: " + userName);
+        Log.d(TAG, "displayUserInfoFromPrefs: Chave Email (" + USER_EMAIL_KEY + ") -> Valor: " + userEmail);
+        // ---------------------------------
+
+
+        // Atualizar o TextView do nome
+        if (textNomeUsuario != null) {
+            if (userName != null && !userName.isEmpty()) {
+                textNomeUsuario.setText("Olá, " + userName + "!");
+            } else {
+                textNomeUsuario.setText("Olá, Usuário!"); // Padrão se o nome não vier
+                Log.w(TAG, "Nome do usuário não encontrado em SharedPreferences.");
+            }
+        } else {
+            Log.e(TAG, "TextView com ID TextNomeUsuario não encontrado no layout.");
+        }
+
+        // Atualizar o TextView do email
+        if (textEmailUsuario != null) {
+            if (userEmail != null && !userEmail.isEmpty()) {
+                textEmailUsuario.setText(userEmail);
+            } else {
+                textEmailUsuario.setText("Email não disponível"); // Padrão se o email não vier
+                Log.w(TAG, "Email do usuário não encontrado em SharedPreferences.");
+            }
+        } else {
+            Log.e(TAG, "TextView com ID TextEmailUsuario não encontrado no layout.");
+        }
+    }
+
+
     private void showDeleteConfirmationDialog() {
         new AlertDialog.Builder(this)
-                .setTitle("Confirmar Exclusão") // Título do dialog
-                .setMessage("Tem certeza que deseja excluir sua conta? Esta ação não pode ser desfeita.") // Mensagem de confirmação
-                .setPositiveButton("Excluir", new DialogInterface.OnClickListener() { // Botão Positivo (Excluir)
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
-                        progressDialog.setMessage("Excluindo conta..."); // Muda a mensagem do progresso
-                        deleteAccount(); // Chama a função para excluir a conta se o usuário confirmar
-                    }
+                .setTitle("Confirmar Exclusão")
+                .setMessage("Tem certeza que deseja excluir sua conta? Esta ação não pode ser desfeita e todos os seus dados serão perdidos.")
+                .setPositiveButton("Excluir", (dialog, which) -> {
+                    deleteAccount();
                 })
-                .setNegativeButton("Cancelar", null) // Botão Negativo (Cancelar), null dismiss o dialog
-                .setIcon(android.R.drawable.ic_dialog_alert) // Ícone de alerta (opcional)
-                .show(); // Mostra o dialog
+                .setNegativeButton("Cancelar", null)
+                .setIcon(android.R.drawable.ic_dialog_alert)
+                .show();
     }
 
-    // Método para obter o Token JWT armazenado (copiado do exemplo anterior)
     private String getJwtToken() {
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-        return prefs.getString(TOKEN_KEY, null); // Retorna o token ou null se não existir
+        String token = prefs.getString(TOKEN_KEY, null);
+        Log.d(TAG, "getJwtToken() chamado. Token retornado: " + (token != null ? "presente" : "nulo"));
+        return token;
     }
 
-    // Método para limpar o Token JWT armazenado localmente (copiado do exemplo anterior)
-    private void clearJwtToken() {
+    // Modificado para limpar token, nome E email do SharedPreferences
+    private void clearAuthData() {
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         SharedPreferences.Editor editor = prefs.edit();
-        editor.remove(TOKEN_KEY);
-        editor.apply(); // Use apply para salvar assincronamente
+        editor.remove(TOKEN_KEY); // Remove o token
+        editor.remove(USER_NAME_KEY); // Remove o nome
+        editor.remove(USER_EMAIL_KEY); // Remove o email
+        editor.apply();
+        Log.i(TAG, "Dados de autenticação (token, nome e email) removidos de SharedPreferences.");
     }
 
-    // Método que faz a chamada para a API de exclusão (copiado do exemplo anterior)
     private void deleteAccount() {
-        String token = getJwtToken(); // Obtém o token armazenado
-
-        if (token == null) {
-            showToast("Erro: Token de autenticação não encontrado. Faça login novamente.");
-            redirectToLogin();
+        String token = getJwtToken();
+        if (token == null || token.isEmpty()) {
+            showToast("Sessão expirada ou token não encontrado. Faça login novamente.");
+            redirectToLogin("Sessão expirada.");
             return;
         }
 
-        String authHeader = "Bearer " + token;
+        progressDialog.setMessage("Excluindo conta...");
+        progressDialog.show();
 
-        progressDialog.show(); // Mostra o dialog de progresso
+        // Loga o token que está sendo enviado para depuração
+        Log.d(TAG, "Tentando excluir conta com token: " + token);
 
-        authService.deleteAccount(authHeader).enqueue(new Callback<ApiResponse>() {
+        // Certifique-se que sua interface AuthService tem um método deleteAccount ASSIM:
+        // @DELETE("seu/endpoint/de/exclusao") // O método HTTP deve ser DELETE e o path deve ser EXATO
+        // Call<ApiResponse> deleteAccount(@Header("Authorization") String authToken);
+        // O endpoint correto geralmente é algo como "/api/users/me" ou "/api/account"
+        // E O MÉTODO DEVE SER DELETE.
+
+        authService.deleteAccount("Bearer " + token).enqueue(new Callback<ApiResponse>() {
             @Override
-            public void onResponse(Call<ApiResponse> call, Response<ApiResponse> response) {
-                progressDialog.dismiss(); // Esconde o dialog de progresso
-
+            public void onResponse(@NonNull Call<ApiResponse> call, @NonNull Response<ApiResponse> response) {
+                progressDialog.dismiss();
                 if (response.isSuccessful()) {
-                    showToast("Conta excluída com sucesso!");
-                    clearJwtToken(); // Limpa o token armazenado localmente
-                    redirectToLogin(); // Redireciona para a tela de login
+                    String successMessage = "Conta excluída com sucesso!";
+                    if (response.body() != null && response.body().getMessage() != null && !response.body().getMessage().isEmpty()) {
+                        successMessage = response.body().getMessage();
+                    }
+                    handleDeleteSuccess(successMessage);
                 } else {
-                    // Lidar com erros do backend (ex: 401, 404, 500)
-                    try {
-                        String errorBody = response.errorBody() != null ? response.errorBody().string() : "Erro desconhecido";
-                        Log.e("CentralActivity", "Erro ao excluir conta: " + response.code() + " - " + errorBody);
-
-                        String errorMessage = "Erro ao excluir conta. Código: " + response.code();
-                        if (response.code() == 401 || response.code() == 403) {
-                            errorMessage = "Sessão expirada ou não autorizada. Faça login novamente.";
-                            clearJwtToken(); // Limpa o token inválido
-                            redirectToLogin(); // Redireciona para login
-                        } else if (response.code() == 404) {
-                            errorMessage = "Usuário não encontrado no servidor."; // Raro, mas possível
-                        } else {
-                            // Lógica similar para tentar obter mensagem do corpo do erro se ApiResponse puder
-                            errorMessage = "Erro no servidor ao excluir."; // Fallback
-                        }
-
-                        showToast(errorMessage);
-
-                    } catch (Exception e) {
-                        Log.e("CentralActivity", "Erro ao ler errorBody ou processar erro", e);
-                        showToast("Erro ao processar resposta do servidor.");
+                    // Se o erro for 401 (Não Autorizado) ou 403 (Proibido), indica problema no token
+                    if (response.code() == 401 || response.code() == 403) {
+                        showToast("Sessão expirada ou não autorizada para exclusão. Faça login novamente.");
+                        clearAuthData();
+                        redirectToLogin("Sessão expirada.");
+                    } else {
+                        handleDeleteError(response); // Lida com outros erros (404, 409, 500, etc.)
                     }
                 }
             }
 
             @Override
-            public void onFailure(Call<ApiResponse> call, Throwable t) {
-                progressDialog.dismiss(); // Esconde o dialog de progresso
-                Log.e("CentralActivity", "Falha na requisição de exclusão", t);
-
-                String errorMessage = "Falha na conexão ao excluir conta. Tente novamente.";
-                if (t instanceof java.net.SocketTimeoutException) {
-                    errorMessage = "Tempo limite de conexão esgotado. Verifique sua internet.";
-                } else if (t instanceof java.net.ConnectException) {
-                    errorMessage = "Não foi possível conectar ao servidor.";
-                }
-                showToast(errorMessage);
+            public void onFailure(@NonNull Call<ApiResponse> call, @NonNull Throwable t) {
+                progressDialog.dismiss();
+                handleNetworkError(t); // Lida com erros de conexão/rede
             }
         });
     }
 
-    // Método para redirecionar para a tela de login (copiado do exemplo anterior)
-    private void redirectToLogin() {
-        Intent intent = new Intent(CentralActivity.this, LoginActivity.class);
-        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK); // Limpa a pilha de activities
-        startActivity(intent);
-        finish(); // Finaliza a CentralActivity
+    private void handleDeleteSuccess(String message) {
+        showToast(message);
+        clearAuthData(); // Limpa dados após exclusão bem-sucedida
+        redirectToLogin("Sua conta foi excluída.");
     }
 
-    // Método auxiliar para mostrar Toast (copiado do exemplo anterior)
+    private void handleDeleteError(Response<ApiResponse> response) {
+        String errorBodyString = null;
+        if (response.errorBody() != null) {
+            try {
+                errorBodyString = response.errorBody().string();
+            } catch (IOException e) {
+                Log.e(TAG, "Erro ao ler o corpo do erro da API durante exclusão", e);
+            }
+        }
+
+        Log.e(TAG, "Erro ao excluir conta (HTTP " + response.code() + ") - Body: " + (errorBodyString != null ? errorBodyString : "N/A"));
+
+        String errorMessage = "Erro desconhecido ao excluir conta (Código: " + response.code() + ")";
+        Gson gson = new Gson();
+
+        if (errorBodyString != null && !errorBodyString.trim().isEmpty()) {
+            try {
+                ApiResponse errorResponse = gson.fromJson(errorBodyString, ApiResponse.class);
+                if (errorResponse != null && errorResponse.getMessage() != null && !errorResponse.getMessage().isEmpty()) {
+                    errorMessage = errorResponse.getMessage();
+                }
+            } catch (JsonSyntaxException e) {
+                Log.w(TAG, "Não foi possível parsear o JSON do corpo do erro (exclusão): " + e.getMessage());
+            }
+        }
+
+        switch (response.code()) {
+            case 400:
+                if (errorMessage.startsWith("Erro desconhecido")) errorMessage = "Requisição inválida.";
+                break;
+            case 404: // Not Found - Este é o erro que você está recebendo!
+                // -> Provável causa: Endpoint na AuthService está ERRADO ou o TOKEN é inválido/expirado
+                // e o backend retorna 404 em vez de 401/403 para este caso.
+                if (errorMessage.startsWith("Erro desconhecido")) {
+                    errorMessage = "Usuário ou endpoint de exclusão não encontrado.";
+                }
+                break;
+            case 409: // Conflict
+                if (errorMessage.startsWith("Erro desconhecido")) errorMessage = "Não foi possível excluir a conta devido a um conflito.";
+                break;
+            case 500: // Internal Server Error
+                if (errorMessage.startsWith("Erro desconhecido")) errorMessage = "Erro interno no servidor. Tente mais tarde.";
+                break;
+            default:
+                break;
+        }
+        showToast(errorMessage);
+    }
+
+    private void handleNetworkError(Throwable t) {
+        Log.e(TAG, "Falha na rede ao tentar excluir conta", t);
+        String errorMessage = "Falha na conexão ao tentar excluir conta";
+
+        if (t instanceof java.net.SocketTimeoutException) {
+            errorMessage = "Tempo limite de conexão esgotado. Verifique sua internet.";
+        } else if (t instanceof java.net.ConnectException) {
+            errorMessage = "Não foi possível conectar ao servidor.";
+        } else if (t.getMessage() != null) {
+            errorMessage = "Erro de rede: " + t.getMessage();
+        }
+
+        showToast(errorMessage + " Tente novamente.");
+    }
+
+    // Método para redirecionar para LoginActivity
+    private void redirectToLogin(String messageToLoginScreen) {
+        Intent intent = new Intent(this, LoginActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        if (messageToLoginScreen != null && !messageToLoginScreen.isEmpty()) {
+            // Opcional: Se LoginActivity estiver preparada para receber e mostrar essa mensagem
+            intent.putExtra("redirectMessage", messageToLoginScreen);
+        }
+        startActivity(intent);
+        finishAffinity();
+    }
+
     private void showToast(String message) {
-        Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show();
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        // Garante que o diálogo de progresso seja fechado quando a Activity for destruída
         if (progressDialog != null && progressDialog.isShowing()) {
             progressDialog.dismiss();
         }
     }
-    // -----------------------------------------------------------
+
+    // Opcional: Método para carregar dados completos do perfil via API
+    // Útil se você quiser garantir que os dados exibidos na Central estejam sempre atualizados
+    // (por exemplo, se o usuário editar o perfil na ProfileActivity e voltar para a Central).
+    // private void loadUserProfileDataFromApi() {
+    //    String token = getJwtToken();
+    //    if (token == null) {
+    //        Log.w(TAG, "Token nulo ao tentar carregar perfil via API na CentralActivity.");
+    //        return;
+    //    }
+    //    // Assumindo que AuthService tem getCurrentUserProfile e que UserProfileResponse tem getNome/getEmail
+    //    authService.getCurrentUserProfile("Bearer " + token).enqueue(new Callback<UserProfileResponse>() {
+    //        @Override
+    //        public void onResponse(@NonNull Call<UserProfileResponse> call, @NonNull Response<UserProfileResponse> response) {
+    //            if (response.isSuccessful() && response.body() != null) {
+    //                UserProfileResponse profile = response.body();
+    //                if (textNomeUsuario != null && profile.getNome() != null) {
+    //                     textNomeUsuario.setText("Olá, " + profile.getNome() + "!");
+    //                }
+    //                if (textEmailUsuario != null && profile.getEmail() != null) {
+    //                    textEmailUsuario.setText(profile.getEmail());
+    //                }
+    //                Log.d(TAG, "Dados do perfil atualizados na Central via API.");
+    //            } else {
+    //                Log.e(TAG, "Erro ao carregar perfil via API (" + response.code() + ")");
+    //                // Lidar com 401/403: clearAuthData() e redirectToLogin()
+    //            }
+    //        }
+    //        @Override
+    //        public void onFailure(@NonNull Call<UserProfileResponse> call, @NonNull Throwable t) {
+    //             Log.e(TAG, "Falha na rede ao carregar perfil via API", t);
+    //             // Tratar erro de rede
+    //        }
+    //    });
+    // }
+
 }

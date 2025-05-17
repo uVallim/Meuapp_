@@ -1,211 +1,264 @@
 package com.example.meuapp;
 
-// Importações padrão da sua Activity
+import android.app.ProgressDialog;
+import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
-import android.widget.EditText;
+import android.util.Log;
+import android.util.Patterns;
+import android.view.View;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.Toast;
 
-// --- Importações necessárias para a funcionalidade de API ---
-import android.app.ProgressDialog; // Para o diálogo de progresso
-import android.content.Context; // Para usar SharedPreferences
-import android.content.Intent; // Para redirecionar (se necessário em caso de 401)
-import android.util.Log; // Para logs de debug
-import android.view.View; // Para o OnClickListener
-
-// Importações da API e Modelos
-import com.example.meuapp.api.ApiClient; // Para obter a instância do serviço API
-import com.example.meuapp.api.AuthService; // Sua interface de serviço API
-import com.example.meuapp.model.ApiResponse; // Assumindo resposta genérica do backend
-import com.example.meuapp.model.UpdateUserRequest; // Sua classe de modelo para a requisição de atualização
-
-import retrofit2.Call; // Retrofit Call
-import retrofit2.Callback; // Retrofit Callback
-import retrofit2.Response; // Retrofit Response
-// ----------------------------------------------------------
-
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+
+import com.example.meuapp.api.ApiClient;
+import com.example.meuapp.api.AuthService;
+import com.example.meuapp.model.ApiResponse;
+import com.example.meuapp.model.UserProfileResponse; // Certifique-se que esta classe e seus campos (nome, email) existem
+import com.example.meuapp.model.UpdateUserRequest; // Certifique-se que esta classe e seus campos (nome, email, senha) existem
+
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
+
+import com.google.gson.Gson;
+import com.google.gson.JsonSyntaxException;
+
+import java.io.IOException;
 
 public class ProfileActivity extends AppCompatActivity {
 
-    // Declaração dos componentes da interface (usando os nomes do seu código)
     private EditText caixaNome, caixaEmail, caixaPassword;
     private Button botaoSalvar;
 
-    // --- Variáveis necessárias para a funcionalidade de API ---
-    private AuthService authService; // Instância do serviço API
-    private ProgressDialog progressDialog; // Diálogo de progresso
-    // Constantes para SharedPreferences (para o token JWT)
-    private static final String PREFS_NAME = "AuthPrefs"; // Mesmo nome usado em Login/CentralActivity
-    private static final String TOKEN_KEY = "jwt_token"; // Mesma chave usada em Login/CentralActivity
-    // -------------------------------------------------------
+    private AuthService authService;
+
+    // NOTA: ProgressDialog é depreciado. Considere usar um ProgressBar no layout ou um DialogFragment.
+    private ProgressDialog progressDialog;
+
+    // Constantes para SharedPreferences (DEVEM SER IDÊNTICAS em Login, Central e Profile)
+    private static final String PREFS_NAME = "AuthPrefs";
+    private static final String TOKEN_KEY = "jwt_token";
+    private static final String USER_NAME_KEY = "user_name"; // Mantido para consistência
+    private static final String USER_EMAIL_KEY = "user_email"; // Mantido para consistência
+
+    private static final String TAG = "ProfileActivity";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_profile); // Layout da sua tela de perfil
+        setContentView(R.layout.activity_profile);
 
-        // Inicializando os elementos do layout
-        initComponents(); // Encontra os EditTexts e Button
+        initComponents();
 
-        // --- Inicializar serviço API e diálogo de progresso ---
-        authService = ApiClient.getClient().create(AuthService.class); // Inicializa o serviço Retrofit
+        authService = ApiClient.getClient().create(AuthService.class);
+
         progressDialog = new ProgressDialog(this);
-        progressDialog.setMessage("Salvando alterações..."); // Mensagem do progresso
-        progressDialog.setCancelable(false); // Não permitir cancelar
-        // ----------------------------------------------------
+        progressDialog.setMessage("Processando...");
+        progressDialog.setCancelable(false);
 
+        // Carregar dados atuais do usuário para preencher os campos (exceto senha)
+        loadUserProfileData();
 
-        // TODO: Opcional: Carregar dados atuais do usuário para preencher os campos (exceto senha)
-        // Isso geralmente exige um novo endpoint no backend (ex: GET /api/users/me com authMiddleware)
-        // e uma chamada API aqui no onCreate para buscar os dados e preencher caixaNome e caixaEmail.
-        // A lógica carregarPerfil() baseada em SharedPreferences NÃO é segura para senha e pode estar desatualizada para nome/email.
-        // **Remova a chamada a carregarPerfil() baseada em SharedPreferences:**
-        // carregarPerfil(); // <-- REMOVER ESTA LINHA
-
-        // Adicionar funcionalidade ao botão Salvar
-        botaoSalvar.setOnClickListener(view -> {
-            // Lógica para salvar as alterações feitas
-            // **Chame o novo método que usa a API em vez de salvarPerfil:**
-            saveAccountChanges(); // <-- CHAMAR O NOVO MÉTODO AQUI
-
-            // **Remova o Toast de sucesso local:**
-            // Toast.makeText(ProfileActivity.this, "Informações salvas com sucesso!", Toast.LENGTH_SHORT).show(); // <-- REMOVER ESTA LINHA
-        });
-
-        // **Remova completamente os métodos carregarPerfil e salvarPerfil baseados em SharedPreferences.**
+        botaoSalvar.setOnClickListener(view -> saveAccountChanges());
     }
 
     private void initComponents() {
-        // Encontrando os elementos do layout pelos IDs
-        caixaNome = findViewById(R.id.CaixaNome); // Verifique se os IDs batem com seu XML
-        caixaEmail = findViewById(R.id.CaixaEmail); // Verifique se os IDs batem com seu XML
-        caixaPassword = findViewById(R.id.CaixaPassword); // Campo para a NOVA senha. Verifique se o ID bate.
-        botaoSalvar = findViewById(R.id.BotaoSalvar); // Verifique se o ID bate com seu XML
+        caixaNome = findViewById(R.id.CaixaNome);         // Verifique os IDs no seu XML de Profile
+        caixaEmail = findViewById(R.id.CaixaEmail);       // Verifique os IDs no seu XML de Profile
+        caixaPassword = findViewById(R.id.CaixaPassword); // Campo para a NOVA senha. Verifique o ID.
+        botaoSalvar = findViewById(R.id.BotaoSalvar);     // Verifique o ID no seu XML de Profile
     }
 
-
-    // --- NOVO MÉTODO QUE CHAMA A API PARA SALVAR AS ALTERAÇÕES ---
-    private void saveAccountChanges() {
-        // 1. Obter valores dos campos
-        String novoNome = caixaNome.getText().toString().trim();
-        String novoEmail = caixaEmail.getText().toString().trim();
-        String novaSenha = caixaPassword.getText().toString().trim(); // Obter o texto da NOVA senha digitada
-
-        // 2. Obter o token JWT armazenado
-        String token = getJwtToken(); // Método para obter o token (copiado da CentralActivity)
-
-        // Validar que o token existe
+    private void loadUserProfileData() {
+        String token = getJwtToken();
         if (token == null) {
-            showToast("Sessão expirada. Faça login novamente.");
-            // Opcional: Redirecionar para login, implemente redirectToLogin() se necessário
-            // redirectToLogin();
+            showToast("Sessão não encontrada. Faça login novamente.");
+            redirectToLogin();
             return;
         }
 
-        // 3. Validar campos preenchidos localmente (opcional, mas recomendado antes de enviar)
-        // Se o email foi preenchido, validar o formato
-        if (!novoEmail.isEmpty() && !isEmailValid(novoEmail)) { // Implemente isEmailValid() se não tiver
-            showToast("Formato do novo e-mail inválido.");
-            return;
-        }
-        // Se a senha foi preenchida, validar a força/formato (use a mesma lógica de cadastro, mas para a nova senha)
-        if (!novaSenha.isEmpty() /* && !isPasswordValid(novaSenha) */) { // Implemente isPasswordValid() se não tiver
-            // showToast("A nova senha não atende aos requisitos.");
-            // return;
-        }
+        progressDialog.setMessage("Carregando perfil...");
+        progressDialog.show();
 
+        // --- LOG PARA DEPURAR O TOKEN ENVIADO ---
+        Log.d(TAG, "loadUserProfileData: Tentando carregar perfil com token: " + token);
+        // ---------------------------------------
 
-        // 4. Criar o objeto de requisição de atualização
-        UpdateUserRequest request = new UpdateUserRequest();
-
-        // 5. Definir APENAS os campos que foram preenchidos (não vazios)
-        // Retrofit/Gson, por padrão, não incluirão campos que não foram definidos (serão null) no JSON
-        if (!novoNome.isEmpty()) {
-            request.setNome(novoNome);
-        }
-        if (!novoEmail.isEmpty()) {
-            request.setEmail(novoEmail);
-        }
-        if (!novaSenha.isEmpty()) {
-            // TODO: Validar novaSenha localmente antes de definir se usar validação complexa
-            request.setSenha(novaSenha); // Envia a nova senha em texto plano, o backend A CRIPTOGRAFA
-        }
-
-        // Verificar se pelo menos um campo foi definido na requisição
-        if (request.getNome() == null && request.getEmail() == null && request.getSenha() == null) {
-            showToast("Preencha os campos que deseja alterar.");
-            return;
-        }
-
-
-        // 6. Fazer a chamada para a API usando Retrofit
-        String authHeader = "Bearer " + token; // Formato do cabeçalho de autorização
-        progressDialog.show(); // Mostrar progresso
-
-        authService.updateAccount(authHeader, request).enqueue(new Callback<ApiResponse>() {
+        // Supondo que você adicionou um método como `getCurrentUserProfile` na sua AuthService
+        // e um modelo `UserProfileResponse` com os campos `nome` e `email` que correspondem à API.
+        // Exemplo de endpoint: @GET("api/users/me")
+        authService.getCurrentUserProfile("Bearer " + token).enqueue(new Callback<UserProfileResponse>() {
             @Override
-            public void onResponse(Call<ApiResponse> call, Response<ApiResponse> response) {
-                progressDialog.dismiss(); // Esconder progresso
+            public void onResponse(@NonNull Call<UserProfileResponse> call, @NonNull Response<UserProfileResponse> response) {
+                progressDialog.dismiss();
+                if (response.isSuccessful() && response.body() != null) {
+                    UserProfileResponse profile = response.body();
+                    // Verificar se os TextViews e os dados não são nulos antes de setar
+                    if (caixaNome != null && profile.getNome() != null) caixaNome.setText(profile.getNome());
+                    if (caixaEmail != null && profile.getEmail() != null) caixaEmail.setText(profile.getEmail());
 
-                if (response.isSuccessful()) {
-                    showToast("Informações atualizadas com sucesso!");
-                    // Opcional: Limpar o campo de senha após sucesso
-                    caixaPassword.setText("");
-                    // TODO: Se o email foi alterado, o token JWT PODE precisar ser reemitido pelo backend
-                    // na resposta de sucesso para manter o payload do token atualizado para futuras requisições.
-                    // Se o backend não reemite, o cliente deve estar ciente que o email no token payload pode estar desatualizado.
-                    // Opcional: Fechar a activity ou redirecionar
-                    // finish();
+                    // Nunca preencha o campo de senha com uma senha existente por segurança
+                    if (caixaPassword != null) caixaPassword.setText("");
+
+                    Log.d(TAG, "loadUserProfileData: Dados do perfil carregados com sucesso.");
                 } else {
-                    // 7. Lidar com erros do backend (400, 401, 409, 500, etc.)
+                    Log.e(TAG, "loadUserProfileData: Erro ao carregar dados do perfil: " + response.code());
+                    // --- LOG PARA DEPURAR ERRO BODY ---
+                    String errorBodyString = null;
                     try {
-                        String errorBody = response.errorBody() != null ? response.errorBody().string() : "Erro desconhecido";
-                        Log.e("ProfileActivity", "Erro ao atualizar conta: " + response.code() + " - " + errorBody);
+                        if (response.errorBody() != null) errorBodyString = response.errorBody().string();
+                    } catch (IOException e) {
+                        Log.e(TAG, "loadUserProfileData: Erro ao ler errorBody", e);
+                    }
+                    Log.e(TAG, "loadUserProfileData: Error Body: " + (errorBodyString != null ? errorBodyString : "N/A"));
+                    // ---------------------------------
 
-                        String errorMessage = "Erro ao atualizar. Código: " + response.code();
-
-                        if (response.code() == 400) {
-                            errorMessage = "Dados inválidos fornecidos.";
-                        } else if (response.code() == 401 || response.code() == 403) {
-                            errorMessage = "Sessão expirada ou não autorizada. Faça login novamente.";
-                            // TODO: Implementar clearJwtToken() e redirectToLogin() se quiser essa lógica aqui
-                            // clearJwtToken();
-                            // redirectToLogin();
-                        } else if (response.code() == 409) {
-                            errorMessage = "Este e-mail já está em uso por outro usuário.";
-                        } else {
-                            // Tentar obter mensagem de erro específica do corpo da resposta se a API retornar JSON de erro
-                            // ApiResponse errorResponse = new Gson().fromJson(errorBody, ApiResponse.class); // Exemplo se usar Gson
-                            // if (errorResponse != null && errorResponse.getMessage() != null) {
-                            //     errorMessage = "Erro: " + errorResponse.getMessage();
-                            // } else {
-                            errorMessage = "Erro no servidor ao atualizar."; // Mensagem fallback
-                            // }
-                        }
-
-                        showToast(errorMessage);
-
-                    } catch (Exception e) {
-                        Log.e("ProfileActivity", "Erro ao ler errorBody ou processar erro", e);
-                        showToast("Erro ao processar resposta do servidor.");
+                    // Se o token for inválido aqui (401/403), redirecionar para login
+                    if (response.code() == 401 || response.code() == 403) {
+                        showToast("Sessão expirada ao carregar perfil. Faça login novamente.");
+                        clearJwtToken(); // Limpa apenas o token (nome/email podem ser lidos na Central)
+                        redirectToLogin();
+                    } else {
+                        showToast("Erro ao carregar dados do perfil. Tente novamente.");
                     }
                 }
             }
 
             @Override
-            public void onFailure(Call<ApiResponse> call, Throwable t) {
-                progressDialog.dismiss(); // Esconder progresso
-                Log.e("ProfileActivity", "Falha na requisição de atualização", t);
-
-                // 8. Lidar com erros de conexão (timeout, sem internet, etc.)
-                String errorMessage = "Falha na conexão ao atualizar informações. Tente novamente.";
+            public void onFailure(@NonNull Call<UserProfileResponse> call, @NonNull Throwable t) {
+                progressDialog.dismiss();
+                Log.e(TAG, "loadUserProfileData: Falha ao carregar perfil", t);
+                String errorMessage = "Falha na conexão ao carregar perfil.";
                 if (t instanceof java.net.SocketTimeoutException) {
-                    errorMessage = "Tempo limite de conexão esgotado. Verifique sua internet.";
+                    errorMessage = "Tempo limite de conexão esgotado.";
                 } else if (t instanceof java.net.ConnectException) {
                     errorMessage = "Não foi possível conectar ao servidor.";
+                } else if (t.getMessage() != null) {
+                    errorMessage += ": " + t.getMessage();
+                }
+                showToast(errorMessage);
+            }
+        });
+    }
+
+
+    private void saveAccountChanges() {
+        String novoNome = caixaNome != null ? caixaNome.getText().toString().trim() : "";
+        String novoEmail = caixaEmail != null ? caixaEmail.getText().toString().trim() : "";
+        String novaSenha = caixaPassword != null ? caixaPassword.getText().toString().trim() : "";
+
+
+        String token = getJwtToken();
+        if (token == null) {
+            showToast("Sessão expirada. Faça login novamente.");
+            redirectToLogin();
+            return;
+        }
+
+        // Validações locais
+        if (!novoEmail.isEmpty() && !isEmailValid(novoEmail)) {
+            showToast("Formato do novo e-mail inválido.");
+            if (caixaEmail != null) caixaEmail.setError("E-mail inválido");
+            if (caixaEmail != null) caixaEmail.requestFocus();
+            return;
+        }
+
+        // Use sua validação de senha aqui.
+        if (!novaSenha.isEmpty() && !isPasswordValid(novaSenha)) {
+            // A mensagem de erro específica virá de isPasswordValid
+            if (caixaPassword != null) caixaPassword.setError("Senha inválida");
+            if (caixaPassword != null) caixaPassword.requestFocus();
+            return;
+        }
+
+
+        UpdateUserRequest request = new UpdateUserRequest();
+        boolean hasChanges = false;
+
+        // Adicionar ao request apenas os campos que não estão vazios
+        // O ideal seria comparar com os valores originais carregados em loadUserProfileData
+        // para enviar apenas o que realmente mudou.
+        if (!novoNome.isEmpty()) {
+            request.setNome(novoNome);
+            hasChanges = true;
+        }
+        if (!novoEmail.isEmpty()) {
+            request.setEmail(novoEmail);
+            hasChanges = true;
+        }
+        if (!novaSenha.isEmpty()) {
+            request.setSenha(novaSenha); // Backend deve criptografar antes de salvar
+            hasChanges = true;
+        }
+
+        if (!hasChanges) {
+            showToast("Nenhuma alteração detectada para salvar.");
+            return;
+        }
+
+        progressDialog.setMessage("Salvando alterações...");
+        progressDialog.show();
+
+        String authHeader = "Bearer " + token;
+        // --- LOG PARA DEPURAR O TOKEN ENVIADO ---
+        Log.d(TAG, "saveAccountChanges: Tentando salvar alterações com token: " + token);
+        // ---------------------------------------
+
+        // Certifique-se que sua interface AuthService tem um método updateAccount assim:
+        // @PUT("seu/endpoint/de/atualizacao") // ou @POST, @PATCH
+        // Call<ApiResponse> updateAccount(@Header("Authorization") String authToken, @Body UpdateUserRequest request);
+        authService.updateAccount(authHeader, request).enqueue(new Callback<ApiResponse>() {
+            @Override
+            public void onResponse(@NonNull Call<ApiResponse> call, @NonNull Response<ApiResponse> response) {
+                progressDialog.dismiss();
+
+                if (response.isSuccessful()) {
+                    showToast("Informações atualizadas com sucesso!");
+                    // Limpar campo de senha após salvar (mesmo que a API retorne sucesso)
+                    if (caixaPassword != null) caixaPassword.setText("");
+
+                    // Opcional: Recarregar os dados do perfil caso o nome ou email tenham mudado
+                    // para atualizar a tela, ou se o backend retornar o novo token no response.
+                    // Se o backend retorna um NOVO token após a atualização (com email atualizado no payload),
+                    // você deve salvar este novo token aqui para evitar problemas de sessão.
+                    // Ex: if (response.body() != null && response.body().getToken() != null) {
+                    //         saveJwtToken(response.body().getToken()); // Implemente saveJwtToken se necessário
+                    // }
+                    if (request.getNome() != null || request.getEmail() != null) {
+                        loadUserProfileData(); // Recarrega os dados atualizados para a tela
+                    }
+
+                    // Opcional: finish(); // Fechar activity ou redirecionar para CentralActivity
                 } else {
+                    // --- LOG PARA DEPURAR ERRO BODY ---
+                    String errorBodyString = null;
+                    try {
+                        if (response.errorBody() != null) errorBodyString = response.errorBody().string();
+                    } catch (IOException e) {
+                        Log.e(TAG, "saveAccountChanges: Erro ao ler errorBody", e);
+                    }
+                    Log.e(TAG, "saveAccountChanges: Erro na API: " + response.code() + " - Body: " + (errorBodyString != null ? errorBodyString : "N/A"));
+                    // ---------------------------------
+
+                    handleApiError(response);
+                }
+            }
+
+            @Override
+            public void onFailure(@NonNull Call<ApiResponse> call, @NonNull Throwable t) {
+                progressDialog.dismiss();
+                Log.e(TAG, "saveAccountChanges: Falha na requisição de atualização", t);
+                String errorMessage = "Falha na conexão ao atualizar. Verifique sua internet.";
+                if (t instanceof java.net.SocketTimeoutException) {
+                    errorMessage = "Tempo limite de conexão esgotado.";
+                } else if (t instanceof java.net.ConnectException) {
+                    errorMessage = "Não foi possível conectar ao servidor.";
+                } else if (t.getMessage() != null){
                     errorMessage = "Erro de rede: " + t.getMessage();
                 }
                 showToast(errorMessage);
@@ -213,55 +266,127 @@ public class ProfileActivity extends AppCompatActivity {
         });
     }
 
-    // Método para obter o Token JWT (Copie/adapte da CentralActivity ou LoginActivity)
+    // Método genérico para lidar com erros da API (pode ser reutilizado)
+    private void handleApiError(Response<?> response) {
+        String errorBodyString = null;
+        if (response.errorBody() != null) {
+            try {
+                errorBodyString = response.errorBody().string(); // Ler o corpo do erro uma vez
+            } catch (IOException e) {
+                Log.e(TAG, "handleApiError: Erro ao ler o corpo do erro da API", e);
+            }
+        }
+
+        Log.e(TAG, "handleApiError: Erro na API: " + response.code() + " - Body: " + (errorBodyString != null ? errorBodyString : "N/A"));
+
+        String errorMessage = "Erro desconhecido (Código: " + response.code() + ")";
+        Gson gson = new Gson();
+
+        // Tenta parsear uma estrutura de erro comum (ex: { "message": "mensagem de erro" })
+        if (errorBodyString != null && !errorBodyString.trim().isEmpty()) {
+            try {
+                ApiResponse errorResponse = gson.fromJson(errorBodyString, ApiResponse.class);
+                if (errorResponse != null && errorResponse.getMessage() != null && !errorResponse.getMessage().isEmpty()) {
+                    errorMessage = errorResponse.getMessage();
+                }
+            } catch (JsonSyntaxException e) {
+                Log.w(TAG, "handleApiError: Não foi possível parsear o JSON do corpo do erro: " + e.getMessage());
+            }
+        }
+
+        // Mensagens específicas por código de erro, se o parse genérico falhar ou não for suficiente
+        switch (response.code()) {
+            case 400: // Bad Request
+                if (errorMessage.startsWith("Erro desconhecido")) errorMessage = "Dados inválidos fornecidos.";
+                break;
+            case 401: // Unauthorized
+            case 403: // Forbidden
+                errorMessage = "Sessão expirada ou não autorizada. Faça login novamente.";
+                clearJwtToken(); // Limpa apenas o token
+                redirectToLogin();
+                break;
+            case 404: // Not Found
+                if (errorMessage.startsWith("Erro desconhecido")) errorMessage = "Recurso não encontrado.";
+                break;
+            case 409: // Conflict
+                if (errorMessage.startsWith("Erro desconhecido")) errorMessage = "Conflito de dados (ex: e-mail já em uso).";
+                break;
+            case 500: // Internal Server Error
+                if (errorMessage.startsWith("Erro desconhecido")) errorMessage = "Erro interno no servidor. Tente mais tarde.";
+                break;
+            default:
+                // Mantém a mensagem parseada ou o fallback inicial
+                break;
+        }
+        showToast(errorMessage);
+    }
+
+
     private String getJwtToken() {
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-        return prefs.getString(TOKEN_KEY, null);
+        String token = prefs.getString(TOKEN_KEY, null);
+        Log.d(TAG, "getJwtToken() chamado. Token retornado: " + (token != null ? "presente" : "nulo"));
+        return token;
     }
 
-    // Método auxiliar para mostrar Toast (Copie/adapte da CentralActivity ou LoginActivity)
+    // Método para limpar APENAS o token (nome/email podem ser lidos na Central)
+    private void clearJwtToken() {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        SharedPreferences.Editor editor = prefs.edit();
+        editor.remove(TOKEN_KEY);
+        editor.apply();
+        Log.i(TAG, "Token JWT removido de SharedPreferences.");
+    }
+
+    private void redirectToLogin() {
+        Intent intent = new Intent(ProfileActivity.this, LoginActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        startActivity(intent);
+        finish();
+        Log.i(TAG, "Redirecionando para LoginActivity.");
+    }
+
     private void showToast(String message) {
-        Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show();
     }
 
-    // TODO: Implementar isEmailValid() e isPasswordValid() se quiser validação local aqui.
-    // TODO: Implementar clearJwtToken() e redirectToLogin() se quiser que erros 401/403 nesta tela
-    // levem o usuário de volta ao login limpando o token.
+    private boolean isEmailValid(String email) {
+        if (email == null) {
+            return false;
+        }
+        return Patterns.EMAIL_ADDRESS.matcher(email).matches();
+    }
+
+    // Implemente sua lógica de validação de senha aqui
+    private boolean isPasswordValid(String password) {
+        if (password == null || password.isEmpty()) {
+            return true; // Se a senha não for alterada, é válida (não está sendo definida)
+        }
+        // Exemplo: Mínimo 8 caracteres
+        if (password.length() < 8) {
+            showToast("A nova senha deve ter pelo menos 8 caracteres.");
+            return false;
+        }
+        // Adicione outras regras: maiúsculas, minúsculas, números, símbolos, etc.
+        // if (!password.matches(".*[A-Z].*")) {
+        //     showToast("A senha deve conter pelo menos uma letra maiúscula.");
+        //     return false;
+        // }
+        return true;
+    }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        // Garante que o diálogo de progresso seja fechado quando a Activity for destruída
         if (progressDialog != null && progressDialog.isShowing()) {
             progressDialog.dismiss();
         }
     }
 
-    // **REMOVA COMPLETAMENTE ESTES MÉTODOS SEGUINTES, ELES NÃO SÃO NECESSÁRIOS COM A API:**
-    /*
-    // Método para carregar as informações salvas (NÃO USE COM API PARA CARREGAR PERFIL)
-    private void carregarPerfil() {
-        SharedPreferences sharedPreferences = getSharedPreferences("UsuarioPrefs", MODE_PRIVATE);
-        String nome = sharedPreferences.getString("nome", "");
-        String email = sharedPreferences.getString("email", "");
-        String senha = sharedPreferences.getString("senha", ""); // Não salve nem carregue senha assim!
-
-        caixaNome.setText(nome);
-        caixaEmail.setText(email);
-        caixaPassword.setText(senha); // NÃO PREENCHA CAMPO DE SENHA COM SENHA SALVA!
-    }
-
-    // Método para salvar as informações alteradas (NÃO USE COM API PARA SALVAR PERFIL)
-    private void salvarPerfil(String nome, String email, String senha) {
-        SharedPreferences sharedPreferences = getSharedPreferences("UsuarioPrefs", MODE_PRIVATE);
-        SharedPreferences.Editor editor = sharedPreferences.edit();
-
-        editor.putString("nome", nome);
-        editor.putString("email", email);
-        editor.putString("senha", senha); // Não salve senha assim!
-
-        editor.apply();
-    }
-    */
-    // -----------------------------------------------------------------------------
+    // Opcional: Método para salvar APENAS o token (se a API de atualização retornar um novo)
+    // private void saveJwtToken(String newToken) {
+    //     SharedPreferences preferences = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+    //     preferences.edit().putString(TOKEN_KEY, newToken).apply();
+    //     Log.i(TAG, "Novo Token JWT salvo após atualização de perfil.");
+    // }
 }
